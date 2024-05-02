@@ -18,7 +18,7 @@
   },
   "productName": "github-notifier",
   "version": "0.0.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "pl.ceski23.github-notifier",
   "plugins": {},
   "app": {
     "security": {
