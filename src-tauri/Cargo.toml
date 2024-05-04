@@ -24,6 +24,10 @@ keyring = "2.3.2"
 futures = "0.3.30"
 tauri-plugin-autostart = "2.0.0-beta.5"
 tauri-plugin-deep-link = "2.0.0-beta.4"
+tauri-winrt-notification = "0.2.1"
+temp-file = "0.1.8"
+base64 = "0.22.1"
+url = "2.5.0"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!

@@ -1,30 +1,55 @@
 use std::time::Duration;
 
+use base64::Engine;
 use futures::{stream, Stream};
 use serde::Deserialize;
 use tauri_plugin_http::reqwest;
+use url::Url;
+
+#[derive(Deserialize, Debug)]
+pub struct SomeGithubResponse {
+    pub html_url: String,
+}
 
 #[derive(Deserialize, Debug)]
 pub struct Subject {
     pub title: String,
     pub url: String,
-    pub latest_comment_url: String,
+    pub latest_comment_url: Option<String>,
     pub r#type: String,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct GithubResponse {
+pub struct Owner {
+    pub avatar_url: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Repository {
+    pub id: i32,
+    pub name: String,
+    pub full_name: String,
+    pub description: String,
+    pub owner: Owner,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct NotificationThread {
     pub id: String,
+    pub repository: Repository,
+    pub subject: Subject,
     pub reason: String,
     pub unread: bool,
     pub updated_at: String,
-    pub subject: Subject,
+    pub last_read_at: Option<String>,
+    pub url: String,
+    pub subscription_url: String,
 }
 
 async fn fetch_notifications(
     last_modified: Option<String>,
     token: &str,
-) -> Result<(Option<Vec<GithubResponse>>, Option<u64>, Option<String>), reqwest::Error> {
+) -> Result<(Option<Vec<NotificationThread>>, Option<u64>, Option<String>), reqwest::Error> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.append("X-GitHub-Api-Version", "2022-11-28".parse().unwrap());
     headers.append(
@@ -62,7 +87,7 @@ async fn fetch_notifications(
         .get("Last-Modified")
         .and_then(|value| value.to_str().ok().map(|s| s.to_owned()));
     let notifications = match response.status() {
-        reqwest::StatusCode::OK => Some(response.json::<Vec<GithubResponse>>().await?),
+        reqwest::StatusCode::OK => Some(response.json::<Vec<NotificationThread>>().await?),
         reqwest::StatusCode::NOT_MODIFIED => None,
         code => {
             println!("Status code: {:?}", code);
@@ -77,7 +102,9 @@ async fn fetch_notifications(
     Ok((notifications, interval_header, last_modified))
 }
 
-pub fn notifications_stream(token: &str) -> impl Stream<Item = Option<Vec<GithubResponse>>> + '_ {
+pub fn notifications_stream(
+    token: &str,
+) -> impl Stream<Item = Option<Vec<NotificationThread>>> + '_ {
     stream::unfold(
         (tokio::time::interval(Duration::from_secs(60)), None),
         move |(mut interval, last_modified)| async move {
@@ -110,4 +137,50 @@ pub fn notifications_stream(token: &str) -> impl Stream<Item = Option<Vec<Github
             }
         },
     )
+}
+
+pub async fn generate_github_url(
+    notification_thread: &NotificationThread,
+    token: &str,
+    user_id: &str,
+) -> Option<url::Url> {
+    let referrer_id = generate_notification_referrer_id(&notification_thread.id, user_id);
+    let base_url = match &notification_thread.subject {
+        Subject {
+            latest_comment_url: Some(url),
+            ..
+        } => fetch_html_url(url, token).await,
+        Subject { url, .. } => fetch_html_url(url, token).await,
+    }
+    .unwrap_or(String::from(""));
+
+    Url::parse_with_params(&base_url, &[("notification_referrer_id", referrer_id)]).ok()
+}
+
+pub fn generate_notification_referrer_id(notification_id: &str, user_id: &str) -> String {
+    // https://github.com/sindresorhus/notifier-for-github/issues/268
+    let referrer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+        [
+            // MAGIC BYTES ✨
+            vec![0x93, 0x00, 0xCE, 0x00, 0x2B, 0x69, 0x90, 0xB2],
+            notification_id.into(),
+            ":".into(),
+            user_id.into(),
+        ]
+        .concat(),
+    );
+
+    format!("NT_{}", referrer_id)
+}
+
+pub async fn fetch_html_url(url: &str, token: &str) -> Result<String, reqwest::Error> {
+    reqwest::Client::new()
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "Github Notifier")
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", token))
+        .send()
+        .await?
+        .json::<SomeGithubResponse>()
+        .await
+        .map(|response| response.html_url)
 }

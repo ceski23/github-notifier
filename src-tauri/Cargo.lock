@@ -1533,6 +1533,7 @@ dependencies = [
 name = "github-notifier"
 version = "0.0.0"
 dependencies = [
+ "base64 0.22.1",
  "dotenv",
  "futures",
  "keyring",
@@ -1546,7 +1547,10 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-notification",
  "tauri-plugin-shell",
+ "tauri-winrt-notification",
+ "temp-file",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -4469,6 +4473,12 @@ dependencies = [
  "windows 0.56.0",
  "windows-version",
 ]
+
+[[package]]
+name = "temp-file"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f210bda61d003f311d95611d1b68361df8fe8e732c3609f945441bde881321d"
 
 [[package]]
 name = "tempfile"

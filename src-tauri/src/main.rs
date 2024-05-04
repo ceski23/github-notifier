@@ -9,10 +9,15 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_http::reqwest;
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_shell::ShellExt;
+use tauri_winrt_notification::Toast;
+use temp_file::TempFile;
+use url::Url;
 
 mod auth;
-mod notifications;
+mod github;
 
 fn main() {
     dotenv::dotenv().ok();
@@ -34,10 +39,8 @@ fn main() {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let autostart_manager = app.autolaunch();
     let _ = autostart_manager.enable();
-    println!(
-        "registered for autostart? {}",
-        autostart_manager.is_enabled().unwrap()
-    );
+
+    // TODO: code below is shit, refactor it
     let app_handle = app.handle().clone();
     let app_handle2 = app.handle().clone();
 
@@ -122,30 +125,60 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
     tauri::async_runtime::spawn(async move {
-        notifications::notifications_stream(token.as_str())
-            .for_each(|new_notifications| async {
-                println!("New notifications: {:?}", new_notifications);
-                match new_notifications {
-                    Some(notifications) if notifications.len() < 5 => {
-                        for notification in notifications.iter() {
+        github::notifications_stream(token.as_str())
+            .for_each(|threads| async {
+                match threads {
+                    Some(threads) if threads.len() < 5 => {
+                        for thread in threads {
                             app_handle
                                 .notification()
                                 .builder()
-                                .title(notification.subject.title.as_str())
-                                .body(notification.subject.url.as_str())
+                                .title(thread.subject.title.as_str())
+                                .body(thread.subject.url.as_str())
                                 .show()
                                 .unwrap();
                         }
                     }
-                    Some(notifications) => {
+                    Some(threads) => {
+                        // for thread in threads.iter() {
+                        //     println!("New thread: {:#?}", thread);
+                        //     let resp = reqwest::get(thread.repository.owner.avatar_url.as_str())
+                        //         .await
+                        //         .expect("request failed");
+                        //     let body = resp.bytes().await.unwrap();
+                        //     let icon_file = TempFile::with_suffix(".png")
+                        //         .unwrap()
+                        //         .with_contents(&body)
+                        //         .unwrap();
+                        //     let url = github::generate_github_url(thread, &token, "2845072")
+                        //         .await
+                        //         .map_or("https://github.com/notifications".to_string(), |url| {
+                        //             url.into()
+                        //         });
+
+                        //     let app_handle2 = app_handle.clone();
+                        //     Toast::new(Toast::POWERSHELL_APP_ID)
+                        //         .title(thread.subject.title.as_str())
+                        //         .text1(thread.repository.full_name.as_str())
+                        //         .icon(
+                        //             icon_file.path(),
+                        //             tauri_winrt_notification::IconCrop::Circular,
+                        //             thread.subject.title.as_str(),
+                        //         )
+                        //         .on_activated(move || {
+                        //             let _ = app_handle2.shell().open(&url, None);
+                        //             Ok(())
+                        //         })
+                        //         .show()
+                        //         .unwrap();
+                        //     icon_file.leak();
+                        // }
+
                         app_handle
                             .notification()
                             .builder()
                             .title("New notifications!")
-                            .body(format!(
-                                "You have {} new notifications",
-                                notifications.len()
-                            ))
+                            .body(format!("You have {} new notifications", threads.len()))
                             .show()
                             .unwrap();
                     }
