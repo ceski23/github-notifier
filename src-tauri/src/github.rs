@@ -46,115 +46,144 @@ pub struct NotificationThread {
     pub subscription_url: String,
 }
 
-async fn fetch_notifications(
-    last_modified: Option<String>,
-    token: &str,
-) -> Result<(Option<Vec<NotificationThread>>, Option<u64>, Option<String>), reqwest::Error> {
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.append("X-GitHub-Api-Version", "2022-11-28".parse().unwrap());
-    headers.append(
-        reqwest::header::USER_AGENT,
-        "Github Notifier".parse().unwrap(),
-    );
-    headers.append(
-        reqwest::header::ACCEPT,
-        "application/vnd.github+json".parse().unwrap(),
-    );
-    headers.append(
-        reqwest::header::AUTHORIZATION,
-        format!("Bearer {}", token).parse().unwrap(),
-    );
-    if let Some(last_modified) = last_modified {
+pub struct GitHub {
+    http_client: reqwest::Client,
+}
+
+impl GitHub {
+    pub fn new(token: String) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.append("X-GitHub-Api-Version", "2022-11-28".parse().unwrap());
         headers.append(
-            reqwest::header::IF_MODIFIED_SINCE,
-            last_modified.parse().unwrap(),
+            reqwest::header::USER_AGENT,
+            "Github Notifier".parse().unwrap(),
         );
-    }
+        headers.append(
+            reqwest::header::ACCEPT,
+            "application/vnd.github+json".parse().unwrap(),
+        );
+        headers.append(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", &token).parse().unwrap(),
+        );
 
-    let response = reqwest::Client::new()
-        .get("https://api.github.com/notifications")
-        .headers(headers)
-        .timeout(Duration::from_secs(60))
-        .send()
-        .await
-        .expect("failed to send request");
-    let interval_header = response
-        .headers()
-        .get("X-Poll-Interval")
-        .and_then(|value| value.to_str().ok()?.parse().ok());
-    let last_modified = response
-        .headers()
-        .get("Last-Modified")
-        .and_then(|value| value.to_str().ok().map(|s| s.to_owned()));
-    let notifications = match response.status() {
-        reqwest::StatusCode::OK => Some(response.json::<Vec<NotificationThread>>().await?),
-        reqwest::StatusCode::NOT_MODIFIED => None,
-        code => {
-            println!("Status code: {:?}", code);
-            println!(
-                "Failed to fetch notifications: {:?}",
-                response.text().await?
-            );
-            None
+        Self {
+            http_client: reqwest::Client::builder()
+                .default_headers(headers)
+                .build()
+                .unwrap(),
         }
-    };
-
-    Ok((notifications, interval_header, last_modified))
-}
-
-pub fn notifications_stream(
-    token: &str,
-) -> impl Stream<Item = Option<Vec<NotificationThread>>> + '_ {
-    stream::unfold(
-        (tokio::time::interval(Duration::from_secs(60)), None),
-        move |(mut interval, last_modified)| async move {
-            interval.tick().await;
-
-            match fetch_notifications(last_modified.clone(), token).await {
-                Ok((new_notifications, new_interval_duration, new_last_modified)) => {
-                    let last_modified_time = new_last_modified.or(last_modified);
-                    let interval = match new_interval_duration {
-                        Some(duration) if duration != interval.period().as_secs() => {
-                            println!(
-                                "Changing interval duration to {:?}",
-                                Duration::from_secs(duration)
-                            );
-                            let mut new_interval =
-                                tokio::time::interval(Duration::from_secs(duration));
-                            new_interval.tick().await;
-
-                            new_interval
-                        }
-                        _ => interval,
-                    };
-
-                    Some((new_notifications, (interval, last_modified_time)))
-                }
-                Err(e) => {
-                    println!("{:?}", e);
-                    None
-                }
-            }
-        },
-    )
-}
-
-pub async fn generate_github_url(
-    notification_thread: &NotificationThread,
-    token: &str,
-    user_id: &str,
-) -> Option<url::Url> {
-    let referrer_id = generate_notification_referrer_id(&notification_thread.id, user_id);
-    let base_url = match &notification_thread.subject {
-        Subject {
-            latest_comment_url: Some(url),
-            ..
-        } => fetch_html_url(url, token).await,
-        Subject { url, .. } => fetch_html_url(url, token).await,
     }
-    .unwrap_or(String::from(""));
 
-    Url::parse_with_params(&base_url, &[("notification_referrer_id", referrer_id)]).ok()
+    async fn fetch_notifications(
+        &self,
+        last_modified: Option<String>,
+    ) -> Result<(Option<Vec<NotificationThread>>, Option<u64>, Option<String>), reqwest::Error>
+    {
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Some(last_modified) = last_modified {
+            headers.append(
+                reqwest::header::IF_MODIFIED_SINCE,
+                reqwest::header::HeaderValue::from_str(&last_modified).unwrap(),
+            );
+        }
+        let response = self
+            .http_client
+            .get("https://api.github.com/notifications")
+            .headers(headers)
+            .timeout(Duration::from_secs(60))
+            .send()
+            .await?;
+        let interval_header = response
+            .headers()
+            .get("X-Poll-Interval")
+            .and_then(|value| value.to_str().ok()?.parse().ok());
+        let last_modified = response
+            .headers()
+            .get("Last-Modified")
+            .and_then(|value| value.to_str().ok().map(|s| s.to_owned()));
+        let notifications = match response.status() {
+            reqwest::StatusCode::OK => Some(response.json::<Vec<NotificationThread>>().await?),
+            reqwest::StatusCode::NOT_MODIFIED => None,
+            code => {
+                println!("Status code: {:?}", code);
+                println!(
+                    "Failed to fetch notifications: {:?}",
+                    response.text().await?
+                );
+                None
+            }
+        };
+
+        Ok((notifications, interval_header, last_modified))
+    }
+
+    pub fn notifications_stream(&self) -> impl Stream<Item = Option<Vec<NotificationThread>>> + '_ {
+        stream::unfold(
+            (tokio::time::interval(Duration::from_secs(60)), None),
+            move |(mut interval, last_modified)| async move {
+                interval.tick().await;
+
+                match self.fetch_notifications(last_modified.clone()).await {
+                    Ok((new_notifications, new_interval_duration, new_last_modified)) => {
+                        let last_modified_time = new_last_modified.or(last_modified);
+                        let interval = match new_interval_duration {
+                            Some(duration) if duration != interval.period().as_secs() => {
+                                println!(
+                                    "Changing interval duration to {:?}",
+                                    Duration::from_secs(duration)
+                                );
+                                let mut new_interval =
+                                    tokio::time::interval(Duration::from_secs(duration));
+                                new_interval.tick().await;
+
+                                new_interval
+                            }
+                            _ => interval,
+                        };
+
+                        Some((new_notifications, (interval, last_modified_time)))
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                        None
+                    }
+                }
+            },
+        )
+    }
+
+    pub async fn generate_github_url(
+        &self,
+        notification_thread: &NotificationThread,
+        user_id: &str,
+    ) -> Option<url::Url> {
+        let referrer_id = generate_notification_referrer_id(&notification_thread.id, user_id);
+        let base_url = match &notification_thread.subject {
+            Subject {
+                latest_comment_url: Some(url),
+                ..
+            } => self.fetch_html_url(url).await,
+            Subject { url, .. } => self.fetch_html_url(url).await,
+        };
+
+        match base_url {
+            Ok(url) => {
+                Url::parse_with_params(&url, &[("notification_referrer_id", referrer_id)]).ok()
+            }
+            Err(_) => None,
+        }
+    }
+
+    pub async fn fetch_html_url(&self, url: &str) -> Result<String, reqwest::Error> {
+        self.http_client
+            .get(url)
+            .send()
+            .await?
+            .json::<SomeGithubResponse>()
+            .await
+            .map(|response| response.html_url)
+    }
 }
 
 pub fn generate_notification_referrer_id(notification_id: &str, user_id: &str) -> String {
@@ -162,7 +191,7 @@ pub fn generate_notification_referrer_id(notification_id: &str, user_id: &str) -
     let referrer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
         [
             // MAGIC BYTES ✨
-            vec![0x93, 0x00, 0xCE, 0x00, 0x2B, 0x69, 0x90, 0xB2],
+            vec![0x93, 0x00, 0xCE, 0x00, 0x2B, 0x69, 0x90, 0xB3],
             notification_id.into(),
             ":".into(),
             user_id.into(),
@@ -171,16 +200,4 @@ pub fn generate_notification_referrer_id(notification_id: &str, user_id: &str) -
     );
 
     format!("NT_{}", referrer_id)
-}
-
-pub async fn fetch_html_url(url: &str, token: &str) -> Result<String, reqwest::Error> {
-    reqwest::Client::new()
-        .get(url)
-        .header(reqwest::header::USER_AGENT, "Github Notifier")
-        .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", token))
-        .send()
-        .await?
-        .json::<SomeGithubResponse>()
-        .await
-        .map(|response| response.html_url)
 }

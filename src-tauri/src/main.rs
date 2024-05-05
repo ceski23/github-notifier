@@ -9,15 +9,13 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_http::reqwest;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_shell::ShellExt;
 use tauri_winrt_notification::Toast;
-use temp_file::TempFile;
-use url::Url;
 
 mod auth;
 mod github;
+mod utils;
 
 fn main() {
     dotenv::dotenv().ok();
@@ -125,7 +123,10 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
     tauri::async_runtime::spawn(async move {
-        github::notifications_stream(token.as_str())
+        let github = github::GitHub::new(token);
+
+        github
+            .notifications_stream()
             .for_each(|threads| async {
                 match threads {
                     Some(threads) if threads.len() < 5 => {
@@ -141,27 +142,23 @@ fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
                     }
                     Some(threads) => {
                         // for thread in threads.iter() {
-                        //     println!("New thread: {:#?}", thread);
-                        //     let resp = reqwest::get(thread.repository.owner.avatar_url.as_str())
-                        //         .await
-                        //         .expect("request failed");
-                        //     let body = resp.bytes().await.unwrap();
-                        //     let icon_file = TempFile::with_suffix(".png")
-                        //         .unwrap()
-                        //         .with_contents(&body)
-                        //         .unwrap();
-                        //     let url = github::generate_github_url(thread, &token, "2845072")
-                        //         .await
-                        //         .map_or("https://github.com/notifications".to_string(), |url| {
-                        //             url.into()
-                        //         });
-
+                        //     let icon =
+                        //         utils::download_icon(thread.repository.owner.avatar_url.as_str())
+                        //             .await
+                        //             .unwrap();
+                        //     let url =
+                        //         github.generate_github_url(thread, "2845072").await.map_or(
+                        //             String::from("https://github.com/notifications"),
+                        //             |url| url.into(),
+                        //         );
                         //     let app_handle2 = app_handle.clone();
+                        //     println!("Url: {}", url);
+
                         //     Toast::new(Toast::POWERSHELL_APP_ID)
                         //         .title(thread.subject.title.as_str())
                         //         .text1(thread.repository.full_name.as_str())
                         //         .icon(
-                        //             icon_file.path(),
+                        //             icon.path(),
                         //             tauri_winrt_notification::IconCrop::Circular,
                         //             thread.subject.title.as_str(),
                         //         )
@@ -171,7 +168,8 @@ fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
                         //         })
                         //         .show()
                         //         .unwrap();
-                        //     icon_file.leak();
+
+                        //     icon.leak();
                         // }
 
                         app_handle

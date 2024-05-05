@@ -1533,6 +1533,7 @@ dependencies = [
 name = "github-notifier"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "base64 0.22.1",
  "dotenv",
  "futures",
