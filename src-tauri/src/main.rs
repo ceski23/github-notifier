@@ -123,7 +123,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
     tauri::async_runtime::spawn(async move {
-        let github = github::GitHub::new(token);
+        let github = github::GitHub::new(token).await;
 
         github
             .notifications_stream()
@@ -146,11 +146,12 @@ fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
                         //         utils::download_icon(thread.repository.owner.avatar_url.as_str())
                         //             .await
                         //             .unwrap();
-                        //     let url =
-                        //         github.generate_github_url(thread, "2845072").await.map_or(
-                        //             String::from("https://github.com/notifications"),
-                        //             |url| url.into(),
-                        //         );
+                        //     let url = github
+                        //         .generate_github_url(thread, github.user.id)
+                        //         .await
+                        //         .map_or(String::from("https://github.com/notifications"), |url| {
+                        //             url.into()
+                        //         });
                         //     let app_handle2 = app_handle.clone();
                         //     println!("Url: {}", url);
 

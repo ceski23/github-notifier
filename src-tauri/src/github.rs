@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use base64::Engine;
-use futures::{stream, Stream};
+use futures::{stream, Stream, TryFutureExt};
 use serde::Deserialize;
 use tauri_plugin_http::reqwest;
 use url::Url;
@@ -46,12 +46,19 @@ pub struct NotificationThread {
     pub subscription_url: String,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct User {
+    pub id: i32,
+    pub login: String,
+}
+
 pub struct GitHub {
     http_client: reqwest::Client,
+    pub user: User,
 }
 
 impl GitHub {
-    pub fn new(token: String) -> Self {
+    pub async fn new(token: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.append("X-GitHub-Api-Version", "2022-11-28".parse().unwrap());
         headers.append(
@@ -67,12 +74,18 @@ impl GitHub {
             format!("Bearer {}", &token).parse().unwrap(),
         );
 
-        Self {
-            http_client: reqwest::Client::builder()
-                .default_headers(headers)
-                .build()
-                .unwrap(),
-        }
+        let http_client = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap();
+        let user = http_client
+            .get("https://api.github.com/user")
+            .send()
+            .and_then(|response| response.json::<User>())
+            .await
+            .unwrap();
+
+        Self { http_client, user }
     }
 
     async fn fetch_notifications(
@@ -156,9 +169,9 @@ impl GitHub {
     pub async fn generate_github_url(
         &self,
         notification_thread: &NotificationThread,
-        user_id: &str,
+        user_id: i32,
     ) -> Option<url::Url> {
-        let referrer_id = generate_notification_referrer_id(&notification_thread.id, user_id);
+        let referrer_id = Self::generate_notification_referrer_id(&notification_thread.id, user_id);
         let base_url = match &notification_thread.subject {
             Subject {
                 latest_comment_url: Some(url),
@@ -184,20 +197,20 @@ impl GitHub {
             .await
             .map(|response| response.html_url)
     }
-}
 
-pub fn generate_notification_referrer_id(notification_id: &str, user_id: &str) -> String {
-    // https://github.com/sindresorhus/notifier-for-github/issues/268
-    let referrer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-        [
-            // MAGIC BYTES ✨
-            vec![0x93, 0x00, 0xCE, 0x00, 0x2B, 0x69, 0x90, 0xB3],
-            notification_id.into(),
-            ":".into(),
-            user_id.into(),
-        ]
-        .concat(),
-    );
+    pub fn generate_notification_referrer_id(notification_id: &str, user_id: i32) -> String {
+        // https://github.com/sindresorhus/notifier-for-github/issues/268
+        let referrer_id = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+            [
+                // MAGIC BYTES ✨
+                vec![0x93, 0x00, 0xCE, 0x00, 0x2B, 0x69, 0x90, 0xB3],
+                notification_id.into(),
+                ":".into(),
+                user_id.to_string().into(),
+            ]
+            .concat(),
+        );
 
-    format!("NT_{}", referrer_id)
+        format!("NT_{}", referrer_id)
+    }
 }
