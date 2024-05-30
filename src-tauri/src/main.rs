@@ -1,11 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use auth::AUTH_REDIRECT_EVENT;
 use futures::StreamExt;
 use oauth2::TokenResponse;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
+    Manager,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -20,6 +22,20 @@ fn main() {
     dotenv::dotenv().ok();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(
+            |app, argv, _: String| match argv.get(1) {
+                Some(url) if url.starts_with("github-notifier://auth") => {
+                    app.emit(
+                        AUTH_REDIRECT_EVENT,
+                        auth::AuthRedirectEventPayload {
+                            url: url.to_string(),
+                        },
+                    )
+                    .unwrap();
+                }
+                _ => {}
+            },
+        ))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -49,7 +65,14 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         tauri_plugin_notification::PermissionState::Granted => {}
     }
 
-    app.listen("deep-link://new-url", move |_| {
+    match app.deep_link().is_registered("github-notifier") {
+        Ok(true) => {}
+        _ => {
+            app.deep_link().register("github-notifier").unwrap();
+        }
+    }
+
+    app.listen("deep-link://new-url", move |event| {
         let url = app_handle2
             .deep_link()
             .get_current()
@@ -58,14 +81,21 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .first()
             .unwrap()
             .to_string();
-        println!("Received deep link: {}", url);
+        println!("URL: {}", url);
+        println!("EVENT: {}", event.payload());
         app_handle2
             .notification()
             .builder()
-            .title("lol")
-            .body(url)
+            .body(event.payload())
             .show()
             .unwrap();
+        app_handle2
+            .notification()
+            .builder()
+            .body(&url)
+            .show()
+            .unwrap();
+        app_handle2.emit(AUTH_REDIRECT_EVENT, url).unwrap();
     });
 
     let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;

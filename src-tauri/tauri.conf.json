@@ -19,7 +19,14 @@
   "productName": "github-notifier",
   "version": "0.0.0",
   "identifier": "pl.ceski23.github-notifier",
-  "plugins": {},
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["github-notifier"]
+      },
+      "mobile": []
+    }
+  },
   "app": {
     "security": {
       "csp": null
