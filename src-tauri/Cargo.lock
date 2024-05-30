@@ -1538,6 +1538,7 @@ dependencies = [
  "dotenv",
  "futures",
  "keyring",
+ "mac-notification-sys",
  "oauth2",
  "serde",
  "serde_json",
@@ -1548,7 +1549,7 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-notification",
  "tauri-plugin-shell",
- "tauri-winrt-notification",
+ "tauri-winrt-notification 0.3.1",
  "temp-file",
  "tokio",
  "url",
@@ -4349,7 +4350,7 @@ dependencies = [
  "serde_repr",
  "tauri",
  "tauri-plugin",
- "tauri-winrt-notification",
+ "tauri-winrt-notification 0.2.1",
  "thiserror",
  "time",
  "url",
@@ -4469,6 +4470,17 @@ name = "tauri-winrt-notification"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f89f5fb70d6f62381f5d9b2ba9008196150b40b75f3068eb24faeddf1c686871"
+dependencies = [
+ "quick-xml",
+ "windows 0.56.0",
+ "windows-version",
+]
+
+[[package]]
+name = "tauri-winrt-notification"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36778770f6c7f9a60ec08fcd2d923915a4e9015ea36d4dde80ba573345312f0a"
 dependencies = [
  "quick-xml",
  "windows 0.56.0",

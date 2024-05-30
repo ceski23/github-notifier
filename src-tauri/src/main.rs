@@ -10,11 +10,10 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
-use tauri_plugin_shell::ShellExt;
-use tauri_winrt_notification::Toast;
 
 mod auth;
 mod github;
+mod notifications;
 mod utils;
 
 fn main() {
@@ -130,49 +129,20 @@ fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
             .for_each(|threads| async {
                 match threads {
                     Some(threads) if threads.len() < 5 => {
-                        for thread in threads {
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(thread.subject.title.as_str())
-                                .body(thread.subject.url.as_str())
-                                .show()
+                        for thread in threads.iter() {
+                            let url = github
+                                .generate_github_url(thread, github.user.id)
+                                .await
+                                .map_or(String::from("https://github.com/notifications"), |url| {
+                                    url.into()
+                                });
+
+                            notifications::show_notification(thread, app_handle.clone(), url)
+                                .await
                                 .unwrap();
                         }
                     }
                     Some(threads) => {
-                        // for thread in threads.iter() {
-                        //     let icon =
-                        //         utils::download_icon(thread.repository.owner.avatar_url.as_str())
-                        //             .await
-                        //             .unwrap();
-                        //     let url = github
-                        //         .generate_github_url(thread, github.user.id)
-                        //         .await
-                        //         .map_or(String::from("https://github.com/notifications"), |url| {
-                        //             url.into()
-                        //         });
-                        //     let app_handle2 = app_handle.clone();
-                        //     println!("Url: {}", url);
-
-                        //     Toast::new(Toast::POWERSHELL_APP_ID)
-                        //         .title(thread.subject.title.as_str())
-                        //         .text1(thread.repository.full_name.as_str())
-                        //         .icon(
-                        //             icon.path(),
-                        //             tauri_winrt_notification::IconCrop::Circular,
-                        //             thread.subject.title.as_str(),
-                        //         )
-                        //         .on_activated(move || {
-                        //             let _ = app_handle2.shell().open(&url, None);
-                        //             Ok(())
-                        //         })
-                        //         .show()
-                        //         .unwrap();
-
-                        //     icon.leak();
-                        // }
-
                         app_handle
                             .notification()
                             .builder()
