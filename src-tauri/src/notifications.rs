@@ -91,23 +91,23 @@ pub async fn show_notification(
     let response = mac_notification_sys::Notification::default()
         .title(thread.subject.title.as_str())
         .message(thread.repository.full_name.as_str())
-        .main_button(MainButton::DropdownActions(
+        .main_button(mac_notification_sys::MainButton::DropdownActions(
             "Dropdown",
             &["Mark as done", "Unsubscribe"],
         ))
-        .content_image(icon.path())
+        .content_image(icon.path().to_str().unwrap())
         .send()
         .unwrap();
 
     match (response) {
-        NotificationResponse::ActionButton(action_name) => {
+        mac_notification_sys::NotificationResponse::ActionButton(action_name) => {
             if action_name == "Mark as done" {
                 println!("Clicked on Mark as done")
             } else if action_name == "Unsubscribe" {
                 println!("Clicked on Unsubscribe")
             }
         }
-        NotificationResponse::Click => {
+        mac_notification_sys::NotificationResponse::Click => {
             let _ = app_handle.shell().open(&url, None);
         }
         _ => {}
