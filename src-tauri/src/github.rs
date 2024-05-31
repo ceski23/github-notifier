@@ -14,7 +14,7 @@ pub struct SomeGithubResponse {
 #[derive(Deserialize, Debug)]
 pub struct Subject {
     pub title: String,
-    pub url: String,
+    pub url: Option<String>,
     pub latest_comment_url: Option<String>,
     pub r#type: String,
 }
@@ -172,20 +172,18 @@ impl GitHub {
         user_id: i32,
     ) -> Option<url::Url> {
         let referrer_id = Self::generate_notification_referrer_id(&notification_thread.id, user_id);
-        let base_url = match &notification_thread.subject {
+
+        match &notification_thread.subject {
             Subject {
                 latest_comment_url: Some(url),
                 ..
-            } => self.fetch_html_url(url).await,
-            Subject { url, .. } => self.fetch_html_url(url).await,
-        };
-
-        match base_url {
-            Ok(url) => {
-                Url::parse_with_params(&url, &[("notification_referrer_id", referrer_id)]).ok()
-            }
-            Err(_) => None,
+            } => self.fetch_html_url(url).await.ok(),
+            Subject { url: Some(url), .. } => self.fetch_html_url(url).await.ok(),
+            _ => None,
         }
+        .and_then(|url| {
+            Url::parse_with_params(&url, &[("notification_referrer_id", referrer_id)]).ok()
+        })
     }
 
     pub async fn fetch_html_url(&self, url: &str) -> Result<String, reqwest::Error> {

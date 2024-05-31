@@ -17,7 +17,7 @@
     ]
   },
   "productName": "GitHub Notifier",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "identifier": "pl.ceski23.github-notifier",
   "plugins": {
     "deep-link": {
