@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 use std::path::MAIN_SEPARATOR as SEP;
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
-use tauri_winrt_notification::Toast;
 
 use crate::{github::NotificationThread, utils};
 
@@ -22,7 +21,7 @@ pub async fn show_notification(
     {
         app_handle.config().identifier.as_str()
     } else {
-        Toast::POWERSHELL_APP_ID
+        tauri_winrt_notification::Toast::POWERSHELL_APP_ID
     };
 
     let icon = Arc::new(Mutex::new(
@@ -35,7 +34,7 @@ pub async fn show_notification(
     let dismissed_closure_icon = Arc::clone(&icon);
     let icon_lock = icon.lock().unwrap();
 
-    Toast::new(app_id)
+    tauri_winrt_notification::Toast::new(app_id)
         .title(thread.subject.title.as_str())
         .text1(thread.repository.full_name.as_str())
         .icon(
