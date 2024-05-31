@@ -29,7 +29,7 @@ pub struct Repository {
     pub id: i32,
     pub name: String,
     pub full_name: String,
-    pub description: String,
+    pub description: Option<String>,
     pub owner: Owner,
 }
 

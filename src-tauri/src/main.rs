@@ -120,43 +120,37 @@ fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
         github
             .notifications_stream()
             .for_each(|threads| async {
-                match threads {
-                    Some(threads) => {
-                        app_handle
-                            .tray_by_id("tray")
-                            .unwrap()
-                            .set_title(Some(threads.len().to_string()))
-                            .unwrap();
-
-                        if threads.len() < 5 {
-                            for thread in threads.iter() {
-                                let url = github
-                                    .generate_github_url(thread, github.user.id)
-                                    .await
-                                    .map_or(
-                                        String::from("https://github.com/notifications"),
-                                        |url| url.into(),
-                                    );
-
-                                notifications::show_notification(thread, app_handle.clone(), url)
-                                    .await
-                                    .unwrap();
-                            }
+                if let Some(threads) = threads {
+                    app_handle
+                        .tray_by_id("tray")
+                        .unwrap()
+                        .set_title(if threads.is_empty() {
+                            None
                         } else {
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title("New notifications!")
-                                .body(format!("You have {} new notifications", threads.len()))
-                                .show()
+                            Some(threads.len().to_string())
+                        })
+                        .unwrap();
+
+                    if threads.len() < 5 {
+                        for thread in threads.iter() {
+                            let url = github
+                                .generate_github_url(thread, github.user.id)
+                                .await
+                                .map_or(String::from("https://github.com/notifications"), |url| {
+                                    url.into()
+                                });
+
+                            notifications::show_notification(thread, app_handle.clone(), url)
+                                .await
                                 .unwrap();
                         }
-                    }
-                    None => {
+                    } else {
                         app_handle
-                            .tray_by_id("tray")
-                            .unwrap()
-                            .set_title(None::<String>)
+                            .notification()
+                            .builder()
+                            .title("New notifications!")
+                            .body(format!("You have {} new notifications", threads.len()))
+                            .show()
                             .unwrap();
                     }
                 }
