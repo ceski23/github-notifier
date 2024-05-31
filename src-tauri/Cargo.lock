@@ -1566,7 +1566,7 @@ dependencies = [
 
 [[package]]
 name = "github-notifier"
-version = "0.0.1"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -1585,7 +1585,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-shell",
  "tauri-plugin-single-instance",
- "tauri-winrt-notification 0.3.1",
+ "tauri-winrt-notification",
  "temp-file",
  "tokio",
  "url",
@@ -4400,9 +4400,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-notification"
-version = "2.0.0-beta.5"
+version = "2.0.0-beta.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea96397d3d41aab2c837a8293c617c8097fd89fcbce3df1204fd520d64624e74"
+checksum = "39ac3fe3293a3646317fd2d62f5c67a96ed911346d2969261dbd0a755dae8b55"
 dependencies = [
  "log",
  "mac-notification-sys",
@@ -4412,7 +4412,7 @@ dependencies = [
  "serde_repr",
  "tauri",
  "tauri-plugin",
- "tauri-winrt-notification 0.2.1",
+ "tauri-winrt-notification",
  "thiserror",
  "time",
  "url",
@@ -4539,17 +4539,6 @@ checksum = "5993dc129e544393574288923d1ec447c857f3f644187f4fbf7d9a875fbfc4fb"
 dependencies = [
  "embed-resource",
  "toml 0.7.8",
-]
-
-[[package]]
-name = "tauri-winrt-notification"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f89f5fb70d6f62381f5d9b2ba9008196150b40b75f3068eb24faeddf1c686871"
-dependencies = [
- "quick-xml",
- "windows 0.56.0",
- "windows-version",
 ]
 
 [[package]]

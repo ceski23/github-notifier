@@ -16,8 +16,8 @@
       "icons/icon.ico"
     ]
   },
-  "productName": "github-notifier",
-  "version": "0.0.0",
+  "productName": "GitHub Notifier",
+  "version": "0.0.1",
   "identifier": "pl.ceski23.github-notifier",
   "plugins": {
     "deep-link": {
