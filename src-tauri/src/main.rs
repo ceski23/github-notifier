@@ -24,6 +24,7 @@ fn main() {
     dotenv::dotenv().ok();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(
             |app, argv, _: String| match argv.get(1) {
                 Some(url) if url.starts_with("github-notifier://auth") => {

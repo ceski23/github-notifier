@@ -17,7 +17,7 @@
     ]
   },
   "productName": "GitHub Notifier",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "identifier": "pl.ceski23.github-notifier",
   "plugins": {
     "deep-link": {
@@ -25,6 +25,14 @@
         "schemes": ["github-notifier"]
       },
       "mobile": []
+    },
+    "updater": {
+      "endpoints": ["https://github.com/ceski23/github-notifier/releases/latest/download/latest.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUwQ0Q1Q0M2NjAyRDgzMDUKUldRRmd5MWd4bHpONEpzVWdQMTNiTmpnSEh4UEJ2emNhZ3l1SzE2bzlDbElQVkloZWZWRUt2TlgK",
+      "windows": {
+        "installMode": "passive",
+        "installerArgs": ["/NS"]
+      }
     }
   },
   "app": {
