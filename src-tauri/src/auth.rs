@@ -9,12 +9,7 @@ use tauri::Url;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::oneshot;
 
-pub const AUTH_REDIRECT_EVENT: &str = "auth_redirect";
-
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct AuthRedirectEventPayload {
-    pub url: String,
-}
+use crate::constants::{AuthRedirectEventPayload, AUTH_REDIRECT_EVENT};
 
 pub async fn get_token(
     app: &tauri::AppHandle,

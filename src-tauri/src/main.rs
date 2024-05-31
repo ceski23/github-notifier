@@ -1,19 +1,21 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use auth::AUTH_REDIRECT_EVENT;
+use constants::{AuthRedirectEventPayload, AUTH_REDIRECT_EVENT};
 use futures::StreamExt;
 use oauth2::TokenResponse;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    Manager,
+    AppHandle, Manager, Wry,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_shell::ShellExt;
 
 mod auth;
+mod constants;
 mod github;
 mod notifications;
 mod utils;
@@ -27,7 +29,7 @@ fn main() {
                 Some(url) if url.starts_with("github-notifier://auth") => {
                     app.emit(
                         AUTH_REDIRECT_EVENT,
-                        auth::AuthRedirectEventPayload {
+                        AuthRedirectEventPayload {
                             url: url.to_string(),
                         },
                     )
@@ -98,28 +100,96 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         app_handle2.emit(AUTH_REDIRECT_EVENT, url).unwrap();
     });
 
-    let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-    let auth_item = MenuItemBuilder::with_id("auth", "Authenticate").build(app)?;
-    let mut menu_builder = MenuBuilder::new(app);
-
     let token_entry = keyring::Entry::new("github-notifier", "user").unwrap();
-    let token = token_entry.get_password();
+    let token = token_entry.get_password().ok();
 
-    if token.is_err() {
-        menu_builder = menu_builder.item(&auth_item);
+    setup_tray(&app_handle, token.is_some())?;
+
+    if let Some(token) = token {
+        start_monitoring_notifications(app_handle.clone(), token)
     }
 
-    let menu = menu_builder.item(&quit_item).build()?;
+    Ok(())
+}
 
-    TrayIconBuilder::new()
-        .title("2")
+fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
+    tauri::async_runtime::spawn(async move {
+        let github = github::GitHub::new(token).await;
+
+        // TODO: handle errors
+        github
+            .notifications_stream()
+            .for_each(|threads| async {
+                match threads {
+                    Some(threads) => {
+                        app_handle
+                            .tray_by_id("tray")
+                            .unwrap()
+                            .set_title(Some(threads.len().to_string()))
+                            .unwrap();
+
+                        if threads.len() < 5 {
+                            for thread in threads.iter() {
+                                let url = github
+                                    .generate_github_url(thread, github.user.id)
+                                    .await
+                                    .map_or(
+                                        String::from("https://github.com/notifications"),
+                                        |url| url.into(),
+                                    );
+
+                                notifications::show_notification(thread, app_handle.clone(), url)
+                                    .await
+                                    .unwrap();
+                            }
+                        } else {
+                            app_handle
+                                .notification()
+                                .builder()
+                                .title("New notifications!")
+                                .body(format!("You have {} new notifications", threads.len()))
+                                .show()
+                                .unwrap();
+                        }
+                    }
+                    None => {
+                        app_handle
+                            .tray_by_id("tray")
+                            .unwrap()
+                            .set_title(None::<String>)
+                            .unwrap();
+                    }
+                }
+            })
+            .await;
+    });
+}
+
+fn create_tray_menu(
+    app: &AppHandle,
+    is_authorized: bool,
+) -> Result<tauri::menu::Menu<Wry>, Box<dyn std::error::Error>> {
+    let mut menu_builder = MenuBuilder::new(app);
+
+    if !is_authorized {
+        menu_builder =
+            menu_builder.item(&MenuItemBuilder::with_id("auth", "Authenticate").build(app)?);
+    }
+
+    let menu = menu_builder
+        .item(&MenuItemBuilder::with_id("notifications", "Open notifications").build(app)?)
+        .item(&PredefinedMenuItem::quit(app, Some("Quit"))?)
+        .build()?;
+
+    Ok(menu)
+}
+
+fn setup_tray(app: &AppHandle, is_authorized: bool) -> Result<(), Box<dyn std::error::Error>> {
+    TrayIconBuilder::with_id("tray")
         .tooltip(app.package_info().name.clone())
         .icon(app.default_window_icon().unwrap().to_owned())
-        .menu(&menu)
+        .menu(&create_tray_menu(app, is_authorized)?)
         .on_menu_event(move |app, event| match event.id().as_ref() {
-            "quit" => {
-                app.exit(0);
-            }
             "auth" => {
                 let app_handle = app.clone();
 
@@ -130,8 +200,10 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                         .set_password(token_response.access_token().secret())
                         .unwrap();
 
-                    // TODO: remove menu item
-                    // menu.remove(&auth_item).unwrap();
+                    if let Some(tray) = app_handle.tray_by_id("tray") {
+                        tray.set_menu(create_tray_menu(&app_handle, true).ok())
+                            .unwrap();
+                    }
 
                     start_monitoring_notifications(
                         app_handle,
@@ -139,51 +211,14 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     );
                 });
             }
+            "notifications" => {
+                app.shell()
+                    .open("https://github.com/notifications", None)
+                    .unwrap();
+            }
             _ => (),
         })
         .build(app)?;
 
-    if let Ok(token) = token {
-        start_monitoring_notifications(app_handle, token)
-    }
-
     Ok(())
-}
-
-fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
-    tauri::async_runtime::spawn(async move {
-        let github = github::GitHub::new(token).await;
-
-        github
-            .notifications_stream()
-            .for_each(|threads| async {
-                match threads {
-                    Some(threads) if threads.len() < 5 => {
-                        for thread in threads.iter() {
-                            let url = github
-                                .generate_github_url(thread, github.user.id)
-                                .await
-                                .map_or(String::from("https://github.com/notifications"), |url| {
-                                    url.into()
-                                });
-
-                            notifications::show_notification(thread, app_handle.clone(), url)
-                                .await
-                                .unwrap();
-                        }
-                    }
-                    Some(threads) => {
-                        app_handle
-                            .notification()
-                            .builder()
-                            .title("New notifications!")
-                            .body(format!("You have {} new notifications", threads.len()))
-                            .show()
-                            .unwrap();
-                    }
-                    _ => (),
-                }
-            })
-            .await;
-    });
 }

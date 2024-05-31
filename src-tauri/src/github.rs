@@ -40,7 +40,7 @@ pub struct NotificationThread {
     pub subject: Subject,
     pub reason: String,
     pub unread: bool,
-    pub updated_at: String,
+    pub updated_at: Option<String>,
     pub last_read_at: Option<String>,
     pub url: String,
     pub subscription_url: String,
