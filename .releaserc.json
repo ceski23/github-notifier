@@ -9,7 +9,7 @@
             "@semantic-release/exec",
             {
                 "execCwd": "src-tauri",
-                "prepareCmd": "yq -i '.version = ${nextRelease.version} -o json tauri.conf.json"
+                "prepareCmd": "yq -i '.version = \"${nextRelease.version}\"' -o json tauri.conf.json"
             }
         ],
         [
