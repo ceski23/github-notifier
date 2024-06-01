@@ -13,16 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-edit
-        uses: baptiste0928/cargo-install@v3
-        with:
-          crate: cargo-edit
-          version: "^0.12.3"
-          features: set-version
-          args: --no-default-features
+      - name: Install yq
+        run: wget https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64 -O /usr/bin/yq && chmod +x /usr/bin/yq
 
       - name: Semantic Release
         id: semantic-release

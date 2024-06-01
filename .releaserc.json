@@ -8,7 +8,8 @@
         [
             "@semantic-release/exec",
             {
-                "prepareCmd": "cargo set-version ${nextRelease.version}"
+                "execCwd": "src-tauri",
+                "prepareCmd": "yq -i '.version = \"${nextRelease.version}\" -o json tauri.conf.json"
             }
         ],
         [
