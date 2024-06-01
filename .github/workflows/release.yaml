@@ -14,7 +14,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install yq
-        run: wget https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64 -O /usr/bin/yq && chmod +x /usr/bin/yq
+        run: |
+          sudo wget -O /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Semantic Release
         id: semantic-release
