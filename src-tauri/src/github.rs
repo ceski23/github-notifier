@@ -46,12 +46,13 @@ pub struct NotificationThread {
     pub subscription_url: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct User {
     pub id: i32,
     pub login: String,
 }
 
+#[derive(Clone)]
 pub struct GitHub {
     http_client: reqwest::Client,
     pub user: User,
@@ -210,5 +211,27 @@ impl GitHub {
         );
 
         format!("NT_{}", referrer_id)
+    }
+
+    pub async fn mark_thread_as_done(&self, thread_id: &str) -> Result<(), reqwest::Error> {
+        self.http_client
+            .delete(format!(
+                "https://api.github.com/notifications/threads/{}",
+                thread_id
+            ))
+            .send()
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn delete_thread_subscription(&self, thread_id: &str) -> Result<(), reqwest::Error> {
+        self.http_client
+            .delete(format!(
+                "https://api.github.com/notifications/threads/{}/subscription",
+                thread_id
+            ))
+            .send()
+            .await
+            .map(|_| ())
     }
 }

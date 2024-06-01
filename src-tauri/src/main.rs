@@ -55,10 +55,7 @@ fn main() {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let autostart_manager = app.autolaunch();
     let _ = autostart_manager.enable();
-
-    // TODO: code below is shit, refactor it
     let app_handle = app.handle().clone();
-    let app_handle2 = app.handle().clone();
 
     match app.notification().permission_state().unwrap() {
         tauri_plugin_notification::PermissionState::Denied
@@ -75,30 +72,33 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    app.listen("deep-link://new-url", move |event| {
-        let url = app_handle2
-            .deep_link()
-            .get_current()
-            .unwrap()
-            .unwrap()
-            .first()
-            .unwrap()
-            .to_string();
-        println!("URL: {}", url);
-        println!("EVENT: {}", event.payload());
-        app_handle2
-            .notification()
-            .builder()
-            .body(event.payload())
-            .show()
-            .unwrap();
-        app_handle2
-            .notification()
-            .builder()
-            .body(&url)
-            .show()
-            .unwrap();
-        app_handle2.emit(AUTH_REDIRECT_EVENT, url).unwrap();
+    app.listen("deep-link://new-url", {
+        let app_handle = app.handle().clone();
+
+        move |event| {
+            let url = app_handle
+                .deep_link()
+                .get_current()
+                .unwrap()
+                .unwrap()
+                .first()
+                .unwrap()
+                .to_string();
+
+            app_handle
+                .notification()
+                .builder()
+                .body(event.payload())
+                .show()
+                .unwrap();
+            app_handle
+                .notification()
+                .builder()
+                .body(&url)
+                .show()
+                .unwrap();
+            app_handle.emit(AUTH_REDIRECT_EVENT, url).unwrap();
+        }
     });
 
     let token_entry = keyring::Entry::new("github-notifier", "user").unwrap();
@@ -141,9 +141,14 @@ fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
                                     url.into()
                                 });
 
-                            notifications::show_notification(thread, app_handle.clone(), url)
-                                .await
-                                .unwrap();
+                            notifications::show_notification(
+                                thread,
+                                app_handle.clone(),
+                                url,
+                                &github,
+                            )
+                            .await
+                            .unwrap();
                         }
                     } else {
                         app_handle

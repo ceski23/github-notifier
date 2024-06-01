@@ -11,6 +11,7 @@ pub async fn show_notification(
     thread: &NotificationThread,
     app_handle: AppHandle,
     url: String,
+    github: &crate::github::GitHub,
 ) -> anyhow::Result<()> {
     let exe = tauri::utils::platform::current_exe()?;
     let exe_dir = exe.parent().expect("failed to get exe directory");
@@ -29,42 +30,60 @@ pub async fn show_notification(
             .await
             .unwrap(),
     ));
-    // FIXME: this probably isn't the best way to handle this
-    let activated_closure_icon = Arc::clone(&icon);
-    let dismissed_closure_icon = Arc::clone(&icon);
-    let icon_lock = icon.lock().unwrap();
 
     tauri_winrt_notification::Toast::new(app_id)
         .title(thread.subject.title.as_str())
         .text1(thread.repository.full_name.as_str())
         .icon(
-            icon_lock.path(),
+            icon.lock().unwrap().path(),
             tauri_winrt_notification::IconCrop::Circular,
             thread.subject.title.as_str(),
         )
         .add_button("Mark as done", "done")
         .add_button("Unsubscribe", "unsubscribe")
-        .on_activated(move |_| {
-            let _ = app_handle.shell().open(&url, None);
+        .on_activated({
+            let icon = Arc::clone(&icon);
+            let thread_id = thread.id.clone();
+            let github = github.clone();
 
-            activated_closure_icon
-                .lock()
-                .unwrap()
-                .clone()
-                .cleanup()
-                .unwrap();
+            move |action| {
+                icon.lock().unwrap().clone().cleanup().unwrap();
 
-            Ok(())
+                match action.as_deref() {
+                    Some("done") => {
+                        tauri::async_runtime::spawn({
+                            let thread_id = thread_id.clone();
+                            let github = github.clone();
+                            async move {
+                                github.mark_thread_as_done(&thread_id).await.unwrap();
+                            }
+                        });
+                    }
+                    Some("unsubscribe") => {
+                        tauri::async_runtime::spawn({
+                            let thread_id = thread_id.clone();
+                            let github = github.clone();
+                            async move {
+                                github.delete_thread_subscription(&thread_id).await.unwrap();
+                                github.mark_thread_as_done(&thread_id).await.unwrap();
+                            }
+                        });
+                    }
+                    _ => {
+                        app_handle.shell().open(&url, None).unwrap();
+                    }
+                }
+
+                Ok(())
+            }
         })
-        .on_dismissed(move |_| {
-            dismissed_closure_icon
-                .lock()
-                .unwrap()
-                .clone()
-                .cleanup()
-                .unwrap();
+        .on_dismissed({
+            let icon = Arc::clone(&icon);
 
-            Ok(())
+            move |_| {
+                icon.lock().unwrap().clone().cleanup().unwrap();
+                Ok(())
+            }
         })
         .show()
         .unwrap();
@@ -77,6 +96,7 @@ pub async fn show_notification(
     thread: &NotificationThread,
     app_handle: AppHandle,
     url: String,
+    github: &crate::github::GitHub,
 ) -> anyhow::Result<()> {
     let app_id = if tauri::is_dev() {
         "com.apple.Terminal"
