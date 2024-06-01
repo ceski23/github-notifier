@@ -78,7 +78,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           tagName: ${{ needs.prepare-release.outputs.new_release_git_tag }}
-          releaseName: ${{ needs.prepare-release.outputs.new_release_version }}
+          releaseName: v${{ needs.prepare-release.outputs.new_release_version }}
           releaseBody: ${{ needs.prepare-release.outputs.new_release_notes }}
           args: ${{ matrix.args }}
           includeUpdaterJson: true
