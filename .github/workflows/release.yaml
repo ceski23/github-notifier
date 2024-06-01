@@ -3,6 +3,8 @@ on: workflow_dispatch
 
 jobs:
   prepare-release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     outputs:
       new_release_git_tag: ${{ steps.semantic-release.outputs.new_release_git_tag }}
