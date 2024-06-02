@@ -11,8 +11,10 @@ use tauri::{
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 mod auth;
 mod constants;
@@ -24,6 +26,7 @@ fn main() {
     dotenv::dotenv().ok();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(
             |app, argv, _: String| match argv.get(1) {
@@ -56,6 +59,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let autostart_manager = app.autolaunch();
     let _ = autostart_manager.enable();
     let app_handle = app.handle().clone();
+
+    tauri::async_runtime::spawn(check_updates(app.handle().clone()));
 
     match app.notification().permission_state().unwrap() {
         tauri_plugin_notification::PermissionState::Denied
@@ -111,6 +116,21 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+async fn check_updates(app_handle: AppHandle) {
+    if let Some(update) = app_handle.updater().unwrap().check().await.unwrap() {
+        let should_update_app = app_handle.dialog()
+            .message(format!("Version {} of GitHub Notifier is available (you have {}).\n\nDo you want to update?", update.version, update.current_version))
+            .title("New version of GitHub Notifier is available!")
+            .ok_button_label("Update")
+            .cancel_button_label("Not now")
+            .blocking_show();
+
+        if should_update_app {
+            update.download_and_install(|_, _| {}, || {}).await.unwrap();
+        }
+    }
 }
 
 fn start_monitoring_notifications(app_handle: tauri::AppHandle, token: String) {
