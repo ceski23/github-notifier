@@ -1,6 +1,8 @@
+#[cfg(windows)]
+use std::path::MAIN_SEPARATOR as SEP;
+#[cfg(windows)]
 use std::sync::{Arc, Mutex};
 
-use std::path::MAIN_SEPARATOR as SEP;
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 
@@ -103,23 +105,17 @@ pub async fn show_notification(
     } else {
         app_handle.config().identifier.as_str()
     };
-    let icon = utils::download_icon(thread.repository.owner.avatar_url.as_str())
-        .await
-        .unwrap();
+    let icon = utils::download_icon(thread.repository.owner.avatar_url.as_str()).await?;
 
-    mac_notification_sys::set_application(&app_id).unwrap();
+    mac_notification_sys::set_application(app_id).unwrap_or_default();
     let response = mac_notification_sys::Notification::default()
         .title(thread.subject.title.as_str())
         .message(thread.repository.full_name.as_str())
-        .main_button(mac_notification_sys::MainButton::DropdownActions(
-            "Dropdown",
-            &["Mark as done", "Unsubscribe"],
-        ))
         .content_image(icon.path().to_str().unwrap())
         .send()
         .unwrap();
 
-    match (response) {
+    match response {
         mac_notification_sys::NotificationResponse::ActionButton(action_name) => {
             if action_name == "Mark as done" {
                 println!("Clicked on Mark as done")

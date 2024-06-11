@@ -26,8 +26,7 @@ fn main() {
     dotenv::dotenv().ok();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_single_instance::init(
             |app, argv, _: String| match argv.get(1) {
                 Some(url) if url.starts_with("github-notifier://auth") => {
@@ -42,7 +41,8 @@ fn main() {
                 _ => {}
             },
         ))
-        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -56,8 +56,14 @@ fn main() {
 }
 
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
     let autostart_manager = app.autolaunch();
-    let _ = autostart_manager.enable();
+
+    if !autostart_manager.is_enabled().unwrap_or(false) {
+        let _ = autostart_manager.enable();
+    }
     let app_handle = app.handle().clone();
 
     tauri::async_runtime::spawn(check_updates(app.handle().clone()));
@@ -73,7 +79,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     match app.deep_link().is_registered("github-notifier") {
         Ok(true) => {}
         _ => {
-            app.deep_link().register("github-notifier").unwrap();
+            let _ = app.deep_link().register("github-notifier");
         }
     }
 
@@ -81,28 +87,19 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         let app_handle = app.handle().clone();
 
         move |event| {
-            let url = app_handle
-                .deep_link()
-                .get_current()
-                .unwrap()
-                .unwrap()
+            if let Some(url) = serde_json::from_str::<Vec<String>>(event.payload())
+                .unwrap_or_default()
                 .first()
-                .unwrap()
-                .to_string();
-
-            app_handle
-                .notification()
-                .builder()
-                .body(event.payload())
-                .show()
-                .unwrap();
-            app_handle
-                .notification()
-                .builder()
-                .body(&url)
-                .show()
-                .unwrap();
-            app_handle.emit(AUTH_REDIRECT_EVENT, url).unwrap();
+            {
+                app_handle
+                    .emit(
+                        AUTH_REDIRECT_EVENT,
+                        AuthRedirectEventPayload {
+                            url: url.to_string(),
+                        },
+                    )
+                    .unwrap();
+            }
         }
     });
 
