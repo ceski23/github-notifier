@@ -205,6 +205,7 @@ fn setup_tray(app: &AppHandle, is_authorized: bool) -> Result<(), Box<dyn std::e
     TrayIconBuilder::with_id("tray")
         .tooltip(app.package_info().name.clone())
         .icon(app.default_window_icon().unwrap().to_owned())
+        .icon_as_template(true)
         .menu(&create_tray_menu(app, is_authorized)?)
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "auth" => {
