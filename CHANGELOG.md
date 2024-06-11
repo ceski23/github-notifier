@@ -1,3 +1,15 @@
+# [0.3.0](https://github.com/ceski23/github-notifier/compare/v0.2.0...v0.3.0) (2024-06-11)
+
+
+### Bug Fixes
+
+* fix deep-linking on MacOS ([4de16c7](https://github.com/ceski23/github-notifier/commit/4de16c75e8b51a7b627267490aa92a1e91059125))
+
+
+### Features
+
+* update app icon ([ce48da5](https://github.com/ceski23/github-notifier/commit/ce48da51c36cd4258f6d8879ad0ebd6ad7b7fb0d))
+
 # [0.2.0](https://github.com/ceski23/github-notifier/compare/v0.1.0...v0.2.0) (2024-06-02)
 
 
