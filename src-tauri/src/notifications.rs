@@ -3,10 +3,9 @@ use std::path::MAIN_SEPARATOR as SEP;
 #[cfg(windows)]
 use std::sync::{Arc, Mutex};
 
-use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
-
 use crate::{github::NotificationThread, utils};
+use tauri::AppHandle;
+use tauri_plugin_opener::OpenerExt;
 
 #[cfg(windows)]
 pub async fn show_notification(
@@ -72,7 +71,7 @@ pub async fn show_notification(
                         });
                     }
                     _ => {
-                        app_handle.shell().open(&url, None).unwrap();
+                        app_handle.opener().open_url(&url, None::<&str>).unwrap();
                     }
                 }
 
@@ -98,7 +97,7 @@ pub async fn show_notification(
     thread: &NotificationThread,
     app_handle: AppHandle,
     url: String,
-    github: &crate::github::GitHub,
+    _github: &crate::github::GitHub,
 ) -> anyhow::Result<()> {
     let app_id = if tauri::is_dev() {
         "com.apple.Terminal"
@@ -124,7 +123,7 @@ pub async fn show_notification(
             }
         }
         mac_notification_sys::NotificationResponse::Click => {
-            let _ = app_handle.shell().open(&url, None);
+            let _ = app_handle.opener().open_url(&url, None::<&str>);
         }
         _ => {}
     };

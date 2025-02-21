@@ -7,13 +7,13 @@ use oauth2::TokenResponse;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, Wry,
+    AppHandle, Emitter, Wry,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_deep_link::DeepLinkExt;
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_notification::NotificationExt;
-use tauri_plugin_shell::ShellExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 mod auth;
@@ -26,7 +26,6 @@ fn main() {
     dotenv::dotenv().ok();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_single_instance::init(
             |app, argv, _: String| match argv.get(1) {
                 Some(url) if url.starts_with("github-notifier://auth") => {
@@ -41,13 +40,14 @@ fn main() {
                 _ => {}
             },
         ))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
         .setup(setup)
@@ -58,6 +58,12 @@ fn main() {
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    #[cfg(any(windows, target_os = "linux"))]
+    {
+        use tauri_plugin_deep_link::DeepLinkExt;
+        app.deep_link().register_all()?;
+    }
 
     let autostart_manager = app.autolaunch();
 
@@ -70,27 +76,18 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     match app.notification().permission_state().unwrap() {
         tauri_plugin_notification::PermissionState::Denied
-        | tauri_plugin_notification::PermissionState::Unknown => {
+        | tauri_plugin_notification::PermissionState::Prompt
+        | tauri_plugin_notification::PermissionState::PromptWithRationale => {
             app.notification().request_permission().unwrap();
         }
         tauri_plugin_notification::PermissionState::Granted => {}
     }
 
-    match app.deep_link().is_registered("github-notifier") {
-        Ok(true) => {}
-        _ => {
-            let _ = app.deep_link().register("github-notifier");
-        }
-    }
-
-    app.listen("deep-link://new-url", {
+    app.deep_link().on_open_url({
         let app_handle = app.handle().clone();
 
         move |event| {
-            if let Some(url) = serde_json::from_str::<Vec<String>>(event.payload())
-                .unwrap_or_default()
-                .first()
-            {
+            if let Some(url) = event.urls().first() {
                 app_handle
                     .emit(
                         AUTH_REDIRECT_EVENT,
@@ -120,8 +117,7 @@ async fn check_updates(app_handle: AppHandle) {
         let should_update_app = app_handle.dialog()
             .message(format!("Version {} of GitHub Notifier is available (you have {}).\n\nDo you want to update?", update.version, update.current_version))
             .title("New version of GitHub Notifier is available!")
-            .ok_button_label("Update")
-            .cancel_button_label("Not now")
+            .buttons(MessageDialogButtons::OkCancelCustom("Update".to_owned(), "Not now".to_owned()))
             .blocking_show();
 
         if should_update_app {
@@ -230,8 +226,8 @@ fn setup_tray(app: &AppHandle, is_authorized: bool) -> Result<(), Box<dyn std::e
                 });
             }
             "notifications" => {
-                app.shell()
-                    .open("https://github.com/notifications", None)
+                app.opener()
+                    .open_url("https://github.com/notifications", None::<&str>)
                     .unwrap();
             }
             _ => (),

@@ -5,8 +5,8 @@ use oauth2::{
     AuthUrl, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields, PkceCodeChallenge,
     RedirectUrl, Scope, StandardTokenResponse, TokenUrl,
 };
-use tauri::Url;
-use tauri_plugin_shell::ShellExt;
+use tauri::{Listener, Url};
+use tauri_plugin_opener::OpenerExt;
 use tokio::sync::oneshot;
 
 use crate::constants::{AuthRedirectEventPayload, AUTH_REDIRECT_EVENT};
@@ -33,7 +33,9 @@ pub async fn get_token(
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    app.shell().open(auth_url.as_str(), None).unwrap();
+    app.opener()
+        .open_url(auth_url.as_str(), None::<&str>)
+        .unwrap();
 
     let (code, state) = {
         let (tx, rx) = oneshot::channel();
